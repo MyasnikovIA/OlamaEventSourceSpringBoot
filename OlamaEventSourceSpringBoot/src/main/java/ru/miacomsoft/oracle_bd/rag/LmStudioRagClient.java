@@ -62,7 +62,7 @@ public class LmStudioRagClient {
         }
     }
 
-    public void initializeDocuments(List<String> documents) throws IOException, SQLException {
+    public void initializeDocuments(List<String> documents,boolean isSkypeDouble) throws IOException, SQLException {
         for (String doc : documents) {
             // 1. Проверка на полный дубликат
             if (isExactDuplicate(doc)) {
@@ -72,13 +72,14 @@ public class LmStudioRagClient {
 
             // 2. Получение эмбеддинга для документа
             List<Double> embedding = ollamaClient.getEmbedding(doc);
-
-            // 3. Проверка на семантический дубликат с использованием новой функции
-            double maxSimilarity = database.getMaxSimilarityPercent(embedding);
-
-            if (maxSimilarity >= 99.0) { // 99% сходство
-                System.out.println("⚠️  Пропускаем семантический дубликат (" + String.format("%.2f", maxSimilarity) + "% сходство): " + getDocumentPreview(doc));
-                continue;
+            double maxSimilarity = -1;
+            if (!isSkypeDouble) {
+                // 3. Проверка на семантический дубликат с использованием новой функции
+                maxSimilarity = database.getMaxSimilarityPercent(embedding);
+                if (maxSimilarity >= 99.0) { // 99% сходство
+                    System.out.println("⚠️  Пропускаем семантический дубликат (" + String.format("%.2f", maxSimilarity) + "% сходство): " + getDocumentPreview(doc));
+                    continue;
+                }
             }
 
             // 4. Сохранение документа, если он уникальный
@@ -429,7 +430,7 @@ public class LmStudioRagClient {
                     String document = userInput.substring("doc:".length()).trim();
                     if (!document.isEmpty()) {
                         List<String> documents = Arrays.asList(document);
-                        initializeDocuments(documents);
+                        initializeDocuments(documents,false);
                     }
                     continue;
                 } else if (userInput.startsWith("pull:")) {

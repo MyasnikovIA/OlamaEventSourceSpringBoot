@@ -27,7 +27,7 @@ public class Main {
             String TABLE_NAME = view.getString("TABLE_NAME");
             System.out.println(i + " из " + viewsList.length() + "   " + TABLE_NAME);
             List<String> documents = Arrays.asList("-- table: "+TABLE_NAME+"\r\n```sql\r\n"+TEXT+"\r\n```");
-            ragClient.initializeDocuments(documents);
+            ragClient.initializeDocuments(documents,false);
         }
 
         viewsList = orm_oracle.getJsonSQL(properties,"""
@@ -52,7 +52,7 @@ public class Main {
             if (!ddl.getJSONObject(0).has("TEXT")) continue;
             String viewDDL = ddl.getJSONObject(0).getString("TEXT");
             List<String> documents = Arrays.asList("-- views: "+viewName+"\r\n```sql\r\n"+viewDDL+"\r\n```");
-            ragClient.initializeDocuments(documents);
+            ragClient.initializeDocuments(documents,false);
         }
 
         viewsList = orm_oracle.getJsonSQL(properties,"""
@@ -76,7 +76,7 @@ public class Main {
             String TABLE_NAME = view.getString("INFO");
             System.out.println(i+" из "+viewsList.length()+"   "+ TABLE_NAME);
             List<String> documents = Arrays.asList(TABLE_NAME+"\r\n```sql\r\n"+TEXT+"\r\n```");
-            ragClient.initializeDocuments(documents);
+            ragClient.initializeDocuments(documents,false);
         }
     }
 
