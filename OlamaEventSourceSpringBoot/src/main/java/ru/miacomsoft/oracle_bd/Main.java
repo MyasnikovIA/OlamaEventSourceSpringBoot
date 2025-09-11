@@ -19,6 +19,7 @@ public class Main {
         Properties properties = configLoader.getProperties();
         LmStudioRagClient ragClient = new LmStudioRagClient(properties);
 
+        // Загрузка структуры проекта из Oracle в базу знаний
         JSONArray viewsList = orm_oracle.getJsonSQL(properties,"SELECT DBMS_METADATA.GET_DDL('TABLE', table_name, owner) as TEXT ,table_name  FROM all_tables WHERE owner = 'DEV'");
         for (int i = 0; i < viewsList.length(); i++) {
             JSONObject view = viewsList.getJSONObject(i);

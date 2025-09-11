@@ -151,40 +151,73 @@ public class DatabaseInitializer {
 
             // Функция для вычисления косинусного сходства
             String createCosineSimilarityFunction = """
-                    CREATE OR REPLACE FUNCTION cosine_similarity(vec1 JSONB, vec2 JSONB)
-                    RETURNS DOUBLE PRECISION AS $$
-                    DECLARE
-                        dot_product DOUBLE PRECISION := 0;
-                        norm1 DOUBLE PRECISION := 0;
-                        norm2 DOUBLE PRECISION := 0;
-                        val1 DOUBLE PRECISION;
-                        val2 DOUBLE PRECISION;
-                        i INTEGER;
-                    BEGIN
-                        FOR i IN 0..jsonb_array_length(vec1) - 1 LOOP
-                            val1 := (vec1->>i)::DOUBLE PRECISION;
-                            val2 := (vec2->>i)::DOUBLE PRECISION;
-                            dot_product := dot_product + val1 * val2;
-                            norm1 := norm1 + val1 * val1;
-                            norm2 := norm2 + val2 * val2;
-                        END LOOP;
-                    
-                        IF norm1 = 0 OR norm2 = 0 THEN
-                            RETURN 0;
-                        END IF;
-                    
-                        RETURN dot_product / (SQRT(norm1) * SQRT(norm2));
-                    END;
-                    $$ LANGUAGE plpgsql;
-                    """;
+                CREATE OR REPLACE FUNCTION cosine_similarity(vec1 JSONB, vec2 JSONB)
+                RETURNS DOUBLE PRECISION AS $$
+                DECLARE
+                    dot_product DOUBLE PRECISION := 0;
+                    norm1 DOUBLE PRECISION := 0;
+                    norm2 DOUBLE PRECISION := 0;
+                    val1 DOUBLE PRECISION;
+                    val2 DOUBLE PRECISION;
+                    i INTEGER;
+                BEGIN
+                    FOR i IN 0..jsonb_array_length(vec1) - 1 LOOP
+                        val1 := (vec1->>i)::DOUBLE PRECISION;
+                        val2 := (vec2->>i)::DOUBLE PRECISION;
+                        dot_product := dot_product + val1 * val2;
+                        norm1 := norm1 + val1 * val1;
+                        norm2 := norm2 + val2 * val2;
+                    END LOOP;
+                
+                    IF norm1 = 0 OR norm2 = 0 THEN
+                        RETURN 0;
+                    END IF;
+                
+                    RETURN dot_product / (SQRT(norm1) * SQRT(norm2));
+                END;
+                $$ LANGUAGE plpgsql;
+                """;
 
             stmt.execute(createCosineSimilarityFunction);
             System.out.println("Функция cosine_similarity создана или обновлена");
+
+            // Функция для поиска похожих документов с возвратом процента сходства
+            String createFindSimilarDocumentsFunction = """
+                CREATE OR REPLACE FUNCTION find_similar_documents(
+                    query_embedding JSONB,
+                    similarity_threshold DOUBLE PRECISION DEFAULT 0.8,
+                    top_k INTEGER DEFAULT 5
+                )
+                RETURNS TABLE(
+                    document_id BIGINT,
+                    content TEXT,
+                    embedding JSONB,
+                    similarity_percent DOUBLE PRECISION
+                ) AS $$
+                BEGIN
+                    RETURN QUERY
+                    SELECT 
+                        d.id,
+                        d.content,
+                        e.embedding,
+                        cosine_similarity(e.embedding, query_embedding) * 100 as similarity_percent
+                    FROM documents d
+                    JOIN embeddings e ON d.id = e.document_id
+                    WHERE cosine_similarity(e.embedding, query_embedding) >= similarity_threshold
+                    ORDER BY similarity_percent DESC
+                    LIMIT top_k;
+                END;
+                $$ LANGUAGE plpgsql;
+                """;
+
+            stmt.execute(createFindSimilarDocumentsFunction);
+            System.out.println("Функция find_similar_documents создана или обновлена");
 
         } catch (SQLException e) {
             System.err.println("Ошибка при создании функций: " + e.getMessage());
         }
     }
+
 
     private boolean tableExists(Connection conn, String tableName) throws SQLException {
         try (Statement stmt = conn.createStatement();

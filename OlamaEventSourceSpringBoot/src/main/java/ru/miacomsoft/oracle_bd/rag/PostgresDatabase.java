@@ -13,19 +13,47 @@ public class PostgresDatabase {
     private final Properties properties;
 
     public PostgresDatabase(Properties properties) throws SQLException {
-        this.properties = properties;
-
-        // Используем ConfigLoader для получения URL БД
         ConfigLoader configLoader = new ConfigLoader();
+        if (properties!=null) {
+            this.properties = properties;
+        } else {
+            this.properties = configLoader.getProperties();
+        }
+        ensureDatabaseExists(configLoader); // создаем рабочую базу данных которую указали в конфигурации
         String dbUrl = configLoader.getDbUrl();
-
         this.dbConnection = DriverManager.getConnection(dbUrl,
                 properties.getProperty("spring.datasource.username", "postgres"),
                 properties.getProperty("spring.datasource.password", ""));
-
         createTablesIfNotExists();
         createIndexes();
         createFunctions();
+    }
+
+    public void ensureDatabaseExists( ConfigLoader configLoader) {
+        Properties props = configLoader.getProperties();
+        Properties dbParams = new Properties();
+        dbParams.setProperty("user",  props.getProperty("spring.datasource.username"));
+        dbParams.setProperty("password",  props.getProperty("spring.datasource.password"));
+        String embeddingServerPort = props.getProperty("spring.datasource.port");
+        String embeddingServerHost = props.getProperty("spring.datasource.host");
+        String workDatabase = props.getProperty("spring.datasource.database");
+
+        try (Connection tempConn = DriverManager.getConnection("jdbc:postgresql://" + embeddingServerHost + ":" + embeddingServerPort + "/postgres", dbParams);
+             Statement stmt = tempConn.createStatement()) {
+
+            ResultSet rs = stmt.executeQuery(
+                    "SELECT 1 FROM pg_database WHERE datname = '" + workDatabase + "'");
+
+            if (!rs.next()) {
+                stmt.executeUpdate("CREATE DATABASE " + workDatabase);
+                System.out.println("База данных " + workDatabase + " успешно создана");
+            } else {
+                System.out.println("База данных " + workDatabase + " уже существует");
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Ошибка при создании базы данных: " + e.getMessage());
+        }
     }
 
     public Connection getConnection() {
@@ -121,6 +149,38 @@ public class PostgresDatabase {
 
             stmt.execute(createCosineSimilarityFunction);
             System.out.println("Функция cosine_similarity создана или обновлена");
+
+            // Функция для поиска похожих документов с возвратом процента сходства
+            String createFindSimilarDocumentsFunction = """
+                    CREATE OR REPLACE FUNCTION find_similar_documents(
+                        query_embedding JSONB,
+                        similarity_threshold DOUBLE PRECISION DEFAULT 0.8,
+                        top_k INTEGER DEFAULT 5
+                    )
+                    RETURNS TABLE(
+                        document_id BIGINT,
+                        content TEXT,
+                        embedding JSONB,
+                        similarity_percent DOUBLE PRECISION
+                    ) AS $$
+                    BEGIN
+                        RETURN QUERY
+                        SELECT 
+                            d.id,
+                            d.content,
+                            e.embedding,
+                            cosine_similarity(e.embedding, query_embedding) * 100 as similarity_percent
+                        FROM documents d
+                        JOIN embeddings e ON d.id = e.document_id
+                        WHERE cosine_similarity(e.embedding, query_embedding) >= similarity_threshold
+                        ORDER BY similarity_percent DESC
+                        LIMIT top_k;
+                    END;
+                    $$ LANGUAGE plpgsql;
+                    """;
+
+            stmt.execute(createFindSimilarDocumentsFunction);
+            System.out.println("Функция find_similar_documents создана или обновлена");
         }
     }
 
@@ -200,6 +260,81 @@ public class PostgresDatabase {
         return results;
     }
 
+    // Новая функция для поиска похожих документов с возвратом процента сходства
+    public List<SimilarDocument> findSimilarDocumentsWithSimilarity(List<Double> queryEmbedding, double similarityThreshold, int topK) throws SQLException {
+        JSONArray queryEmbeddingJson = new JSONArray(queryEmbedding);
+
+        String sql = """
+                    SELECT document_id, content, embedding, similarity_percent
+                    FROM find_similar_documents(?::jsonb, ?, ?)
+                """;
+
+        List<SimilarDocument> results = new ArrayList<>();
+        try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
+            pstmt.setString(1, queryEmbeddingJson.toString());
+            pstmt.setDouble(2, similarityThreshold);
+            pstmt.setInt(3, topK);
+
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                long id = rs.getLong("document_id");
+                String content = rs.getString("content");
+                String embeddingJson = rs.getString("embedding");
+                double similarityPercent = rs.getDouble("similarity_percent");
+
+                JSONArray embArray = new JSONArray(embeddingJson);
+                List<Double> embedding = new ArrayList<>();
+                for (int i = 0; i < embArray.length(); i++) {
+                    embedding.add(embArray.getDouble(i));
+                }
+
+                results.add(new SimilarDocument(id, content, embedding, similarityPercent));
+            }
+        }
+        return results;
+    }
+
+    // Функция для проверки семантических дубликатов
+    public boolean hasSemanticDuplicate(List<Double> embedding, double similarityThreshold) throws SQLException {
+        JSONArray embeddingJson = new JSONArray(embedding);
+
+        String sql = """
+                    SELECT COUNT(*) 
+                    FROM find_similar_documents(?::jsonb, ?, 1)
+                """;
+
+        try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
+            pstmt.setString(1, embeddingJson.toString());
+            pstmt.setDouble(2, similarityThreshold);
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        }
+        return false;
+    }
+
+    // Функция для получения максимального процента сходства
+    public double getMaxSimilarityPercent(List<Double> embedding) throws SQLException {
+        JSONArray embeddingJson = new JSONArray(embedding);
+
+        String sql = """
+                    SELECT COALESCE(MAX(similarity_percent), 0)
+                    FROM find_similar_documents(?::jsonb, 0.01, 1)
+                """;
+
+        try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
+            pstmt.setString(1, embeddingJson.toString());
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getDouble(1);
+            }
+        }
+        return 0.0;
+    }
+
     public void addChatMessage(String clientId, String role, String content) throws SQLException {
         String sql = "INSERT INTO chat_histories (client_id, role, content) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
@@ -248,6 +383,16 @@ public class PostgresDatabase {
             this.id = id;
             this.content = content;
             this.embedding = embedding;
+        }
+    }
+
+    // Новый класс для документов с информацией о сходстве
+    public static class SimilarDocument extends Document {
+        public final double similarityPercent;
+
+        public SimilarDocument(long id, String content, List<Double> embedding, double similarityPercent) {
+            super(id, content, embedding);
+            this.similarityPercent = similarityPercent;
         }
     }
 

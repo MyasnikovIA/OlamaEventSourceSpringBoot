@@ -73,26 +73,17 @@ public class LmStudioRagClient {
             // 2. Получение эмбеддинга для документа
             List<Double> embedding = ollamaClient.getEmbedding(doc);
 
-            // 3. Проверка на семантический дубликат
-            List<PostgresDatabase.Document> similarDocs = database.findSimilarDocuments(embedding, 5);
-            boolean hasSemanticDuplicate = false;
+            // 3. Проверка на семантический дубликат с использованием новой функции
+            double maxSimilarity = database.getMaxSimilarityPercent(embedding);
 
-            for (PostgresDatabase.Document similarDoc : similarDocs) {
-                double similarity = calculateCosineSimilarity(embedding, similarDoc.embedding);
-                if (similarity >= 0.99) { // 95% сходство
-                    System.out.println("⚠️  Пропускаем семантический дубликат (" + String.format("%.2f", similarity * 100) + "% сходство): " + getDocumentPreview(doc) + " ~ " + getDocumentPreview(similarDoc.content));
-                    hasSemanticDuplicate = true;
-                    break;
-                }
-            }
-
-            if (hasSemanticDuplicate) {
+            if (maxSimilarity >= 99.0) { // 99% сходство
+                System.out.println("⚠️  Пропускаем семантический дубликат (" + String.format("%.2f", maxSimilarity) + "% сходство): " + getDocumentPreview(doc));
                 continue;
             }
 
             // 4. Сохранение документа, если он уникальный
             database.storeDocumentWithEmbedding(doc, embedding);
-            System.out.println("✅ Сохранен уникальный документ: " + getDocumentPreview(doc));
+            System.out.println("✅ Сохранен уникальный документ: " + getDocumentPreview(doc) + " (макс. сходство: " + String.format("%.2f", maxSimilarity) + "%)");
         }
     }
 
