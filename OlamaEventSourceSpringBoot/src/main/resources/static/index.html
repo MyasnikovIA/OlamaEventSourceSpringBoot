@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h4>🤖 RAG Chat Assistant</h4>
+        <div class="controls">
+            <div class="sound-toggle">
+                <label for="soundToggle" class="sound-toggle-label">
+                    <span class="sound-icon">🔊</span>
+                    <span class="sound-text">Звук</span>
+                </label>
+                <input type="checkbox" id="soundToggle" checked>
+            </div>
+            <button id="clearChat">Очистить чат</button>
+            <button id="settingsBtn">Настройки</button>
+        </div>
+    </header>
+
+    <div class="chat-container">
+        <div id="connectionStatus" class="status connecting">Подключение к SSE...</div>
+        <div id="chatMessages" class="chat-messages"></div>
+    </div>
+
+    <div class="input-area">
+        <div id="attachedFiles" class="attached-files"></div>
+
+        <div class="message-input-container">
+            <textarea id="messageInput" placeholder="Введите ваше сообщение..." rows="1"></textarea>
+            <div class="input-buttons">
+                <div id="dropZone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <span class="drop-icon">📁</span>
+                        <p>Перетащите файлы сюда или кликните для выбора</p>
+                        <input type="file" id="fileInput" multiple accept=".txt,.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.frm,.dfrm" style="display: none;">
+                    </div>
+                </div>
+                <button id="generateButton" class="generate-btn">
+                    <span class="btn-icon">⚡</span>
+                    Generate
+                </button>
+                <button id="sendButton" class="send-btn">
+                    <span class="btn-icon">💬</span>
+                    Chat
+                </button>
+                <button id="cancelButton" class="cancel-btn" style="display: none;">
+                    <span class="btn-icon">✖</span>
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <h2>Настройки</h2>
+
+            <div class="setting-group">
+                <label>Модель чата:</label>
+                <select id="chatModel"></select>
+            </div>
+
+            <div class="setting-group">
+                <label>Модель эмбеддингов:</label>
+                <select id="embeddingModel"></select>
+            </div>
+
+            <div class="setting-group">
+                <label>Промт системы:</label>
+                <textarea id="systemPrompt" rows="4" placeholder="Системный промт для чата..."></textarea>
+            </div>
+
+            <div class="setting-group">
+                <label>Промт генерации:</label>
+                <textarea id="generatePrompt" rows="4" placeholder="Промт для генерации текста..."></textarea>
+            </div>
+
+            <!-- Новая секция для добавления документов -->
+            <div class="setting-group">
+                <label>Добавить документ в RAG:</label>
+                <div id="documentDropZone" class="drop-zone document-drop-zone">
+                    <div class="drop-zone-content">
+                        <span class="drop-icon">📄</span>
+                        <p>Перетащите текстовый файл сюда или кликните для выбора</p>
+                        <input type="file" id="documentFileInput" accept=".txt,.md,.json" style="display: none;">
+                    </div>
+                </div>
+                <textarea id="documentContent" rows="6" placeholder="Содержимое документа или перетащите файл..."></textarea>
+                <div class="document-status" id="documentStatus"></div>
+                <button id="addDocumentBtn" class="add-document-btn">Добавить документ</button>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="saveSettings">Сохранить</button>
+                <button id="closeSettings">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

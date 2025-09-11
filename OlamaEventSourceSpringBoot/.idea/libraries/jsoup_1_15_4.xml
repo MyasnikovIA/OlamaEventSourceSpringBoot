@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="jsoup-1.15.4">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/jsoup-1.15.4.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/ojdbc8-19.8.0.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/lib/orai18n-19.8.0.0.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
